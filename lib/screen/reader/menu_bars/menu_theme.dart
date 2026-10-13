@@ -51,55 +51,66 @@ class _MenuPaletteState extends ConsumerState<MenuPalette> {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: readerThemes.map((theme) {
-                  return GestureDetector(
-                    onTap: () {
-                      // widget.onThemeItemTap(theme);
-                      ref.read(widget.provider.notifier).updateTheme(theme.id);
-                      sp.setString("themeId", theme.id);
-                    },
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 8),
-                      decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(4),
-                          border: Border.all(
-                              width: 0.7,
-                              color: theme.theme.colorScheme.outline),
-                          color: theme.theme.colorScheme.background
-                              .withOpacity(0.5)),
-                      padding: const EdgeInsets.symmetric(
-                          vertical: 16, horizontal: 16),
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 18),
-                              child: ClipOval(
-                                child: Container(
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                        borderRadius: BorderRadius.circular(50),
-                                        border: Border.all(
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 3),
+                      child: GestureDetector(
+                        onTap: () {
+                          ref
+                              .read(widget.provider.notifier)
+                              .updateTheme(theme.id);
+                          sp.setString("themeId", theme.id);
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(4),
+                              border: Border.all(
+                                  width: 0.7,
+                                  color: theme.theme.colorScheme.outline),
+                              color: theme.theme.colorScheme.background
+                                  .withOpacity(0.5)),
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 12, horizontal: 2),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: ClipOval(
+                                    child: Container(
+                                        width: 14,
+                                        height: 14,
+                                        decoration: BoxDecoration(
+                                            borderRadius:
+                                                BorderRadius.circular(50),
+                                            border: Border.all(
+                                                color: reader.themeId ==
+                                                        theme.id
+                                                    ? Colors.transparent
+                                                    : theme.theme.colorScheme
+                                                        .primaryContainer),
                                             color: reader.themeId == theme.id
-                                                ? Colors.transparent
-                                                : theme.theme.colorScheme
-                                                    .primaryContainer),
-                                        color: reader.themeId == theme.id
-                                            ? theme.theme.colorScheme.primary
-                                            : Colors.transparent)),
-                              ),
-                            ),
-                            Text(
-                              theme.name.split("").join("\n"),
-                              style: TextStyle(
-                                  color: theme.theme.colorScheme.onBackground),
-                            )
-                          ]),
+                                                ? theme
+                                                    .theme.colorScheme.primary
+                                                : Colors.transparent)),
+                                  ),
+                                ),
+                                Text(
+                                  theme.name.split("").join("\n"),
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                      fontSize: 13,
+                                      height: 1.15,
+                                      color: theme
+                                          .theme.colorScheme.onBackground),
+                                )
+                              ]),
+                        ),
+                      ),
                     ),
                   );
                 }).toList(),

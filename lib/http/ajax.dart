@@ -18,7 +18,7 @@ import '../utils/log.dart';
 import 'api.dart';
 
 class Ajax {
-  static String BASEURL = "http://app.wenku8.com/android.php";
+  static String BASEURL = "https://wenku8-relay.mewx.org/";
   static String UA =
       "Dalvik/2.1.0 (Linux; U; Android 11; IN2010 Build/RP1A.201005.001)";
   static const String _APPVER = "1.13";
@@ -50,26 +50,34 @@ class Ajax {
     return convert.base64Encode(convert.utf8.encode(param));
   }
 
+  /// 登录成功时接口返回 `1`。
+  static bool isLoginSuccess(Object? res) {
+    return res.toString().trim() == "1";
+  }
+
   static Future<dynamic> post(String param,
       {bool isXml = true, download = false, savePath = ""}) async {
     // 判断是否是登陆请求
     bool isLogin = param.contains("action=login");
-    FormData formData = FormData.fromMap({
+    final body = <String, dynamic>{
       "appver": _APPVER,
       "request": _encrypt(param),
-      "timetoken": DateTime.now().millisecondsSinceEpoch
-    });
+      "timetoken": DateTime.now().millisecondsSinceEpoch,
+    };
+    final options = Options(
+      method: "POST",
+      contentType: Headers.formUrlEncodedContentType,
+    );
     Log.d({
       "appver": _APPVER,
       "request": param,
-      "timetoken": DateTime.now().millisecondsSinceEpoch,
+      "timetoken": body["timetoken"],
       "实际参数": _encrypt(param)
     }, "请求参数");
     try {
       var res = download
-          ? await _client.download("", savePath,
-              data: formData, options: Options(method: "POST"))
-          : (await _client.post("", data: formData));
+          ? await _client.download("", savePath, data: body, options: options)
+          : (await _client.post("", data: body, options: options));
       if (isXml) {
         try {
           return XmlDocument.parse(res.data.toString());
@@ -79,9 +87,9 @@ class Ajax {
             final username = sp.getString("username") ?? "";
             final password = sp.getString("password") ?? "";
             if (username.isNotEmpty && password.isNotEmpty) {
-              var res = await API.login(username, password);
-              Log.d(res, "relogin");
-              if (res) {
+              var loginRes = await API.login(username, password);
+              Log.d(loginRes, "relogin");
+              if (isLoginSuccess(loginRes)) {
                 post(param, isXml: isXml);
               }
             }
@@ -91,7 +99,7 @@ class Ajax {
         }
       } else {
         if (isLogin) {
-          return res.data.toString() == "1";
+          return res.data.toString();
         } else {
           return res.data.toString();
         }

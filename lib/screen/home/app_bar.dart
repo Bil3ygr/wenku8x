@@ -51,82 +51,55 @@ class HomeAppBar extends HookConsumerWidget implements PreferredSizeWidget {
                       flex: 1,
                       child: Container(
                         height: 42,
-                        margin: const EdgeInsets.only(right: 12),
-                        padding: const EdgeInsets.only(left: 12),
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         decoration: BoxDecoration(
                             borderRadius: BorderRadius.circular(50),
                             color: colorScheme.surfaceVariant.withOpacity(0.5)),
-                        child: Row(
-                          children: [
-                            SvgPicture.asset(
-                              "assets/svg/ic_topbar_search.svg",
-                              width: 23,
-                              height: 23,
-                              colorFilter: ColorFilter.mode(
-                                  colorScheme.secondary, BlendMode.srcIn),
-                            ),
-                            Expanded(
-                                child: Container(
-                                    margin: const EdgeInsets.only(left: 16),
-                                    child: GestureDetector(
-                                      child: Text("搜索书名或作者",
-                                          style: TextStyle(
-                                              fontSize: 14,
-                                              color: colorScheme.secondary
-                                                  .withOpacity(0.8))),
-                                      onTap: () {
-                                        onSearchTap();
-                                      },
-                                    ))),
-                            VerticalDivider(
-                              thickness: 1.2,
-                              indent: 8,
-                              endIndent: 8,
-                              color: colorScheme.secondary.withOpacity(0.1),
-                            ),
-                            GestureDetector(
-                              child: Padding(
-                                  padding:
-                                      const EdgeInsets.only(right: 16, left: 3),
-                                  child: SvgPicture.asset(
-                                    "assets/svg/ic_topbar_add.svg",
-                                    width: 23,
-                                    height: 23,
-                                    colorFilter: ColorFilter.mode(
-                                        colorScheme.secondary, BlendMode.srcIn),
-                                  )),
-                              onTap: () {
-                                onAddTap();
-                              },
-                            ),
-                          ],
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: onSearchTap,
+                          child: Row(
+                            children: [
+                              SvgPicture.asset(
+                                "assets/svg/ic_topbar_search.svg",
+                                width: 23,
+                                height: 23,
+                                colorFilter: ColorFilter.mode(
+                                    colorScheme.secondary, BlendMode.srcIn),
+                              ),
+                              Expanded(
+                                  child: Padding(
+                                padding: const EdgeInsets.only(left: 16),
+                                child: Text("搜索书名或作者",
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        color: colorScheme.secondary
+                                            .withOpacity(0.8))),
+                              )),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                    // 原形头像
-                    GestureDetector(
-                      child: ClipOval(
-                          child: avatarFile.data == null
-                              ? Image.asset(
-                                  "assets/image/akari.jpg",
-                                  width: 40,
-                                  height: 40,
-                                )
-                              : Image.file(
-                                  avatarFile.data!,
-                                  width: 40,
-                                  height: 40,
-                                  // errorBuilder: (context, error, stackTrace) {
-                                  //   return Image.asset(
-                                  //     "assets/image/akari.jpg",
-                                  //     width: 40,
-                                  //     height: 40,
-                                  //   );
-                                  // },
-                                )),
-                      onTap: () {
-                        onAvatarTap();
-                      },
+                    const SizedBox(width: 8),
+                    _RoundIconButton(
+                      tooltip: "发现",
+                      onTap: onAddTap,
+                      child: Icon(
+                        Icons.explore_outlined,
+                        size: 22,
+                        color: colorScheme.secondary,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    _RoundIconButton(
+                      tooltip: "我的",
+                      onTap: onAvatarTap,
+                      child: _AvatarFace(
+                        file: avatarFile.data,
+                        color: colorScheme.onSecondaryContainer,
+                      ),
                     )
                   ],
                 ),
@@ -143,4 +116,53 @@ class HomeAppBar extends HookConsumerWidget implements PreferredSizeWidget {
 
   @override
   Size get preferredSize => const Size.fromHeight(71);
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.child,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = getColorScheme(context);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: colorScheme.secondaryContainer.withOpacity(0.65),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(width: 40, height: 40, child: Center(child: child)),
+        ),
+      ),
+    );
+  }
+}
+
+class _AvatarFace extends StatelessWidget {
+  const _AvatarFace({required this.file, required this.color});
+
+  final File? file;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Icon(Icons.person, size: 22, color: color);
+    if (file == null) return fallback;
+    return Image.file(
+      file!,
+      width: 40,
+      height: 40,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) => fallback,
+    );
+  }
 }

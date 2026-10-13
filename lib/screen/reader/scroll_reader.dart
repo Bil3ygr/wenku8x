@@ -5,11 +5,19 @@ import 'package:wenku8x/utils/log.dart';
 
 class ScrollReader extends StatefulHookConsumerWidget {
   const ScrollReader(this.pages, this.controller,
-      {super.key, required this.loadNext, required this.onPageScrollEnd});
+      {super.key,
+      required this.loadNext,
+      required this.onPageScrollEnd,
+      this.axis = Axis.horizontal,
+      this.showContent = true});
   final List<Widget> pages;
   final PageController controller;
   final Function() loadNext;
   final Function() onPageScrollEnd;
+  final Axis axis;
+
+  /// 仿真翻页自己绘制页面。这里仍挂着 PageView，只为占住 PageController。
+  final bool showContent;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _ScrollReaderState();
@@ -42,11 +50,13 @@ class _ScrollReaderState extends ConsumerState<ScrollReader>
         return false;
       },
       child: PageView.builder(
+          scrollDirection: widget.axis,
           physics: const NeverScrollableScrollPhysics(),
           pageSnapping: false,
           controller: widget.controller,
           onPageChanged: onPageChanged,
           itemBuilder: (context, index) {
+            if (!widget.showContent) return const SizedBox.expand();
             return widget.pages[index];
           },
           itemCount: widget.pages.length),

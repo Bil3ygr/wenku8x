@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,8 +13,11 @@ import 'package:wenku8x/screen/reader/menu_bars/progress_bar_provider.dart';
 import 'package:wenku8x/screen/reader/themes/cherry.dart';
 import 'package:wenku8x/screen/reader/themes/glacier.dart';
 import 'package:wenku8x/screen/reader/themes/mulberry.dart';
+import 'package:wenku8x/screen/reader/themes/night.dart';
 import 'package:wenku8x/screen/reader/themes/spring.dart';
 import 'package:wenku8x/screen/reader/themes/walnut.dart';
+import 'package:wenku8x/service/volume_keys.dart';
+import 'package:wenku8x/utils/reader_fonts.dart';
 import 'package:wenku8x/utils/flash.dart';
 import 'package:wenku8x/utils/log.dart';
 import 'package:wenku8x/utils/render.dart';
@@ -193,18 +197,32 @@ class ReaderNotifier
   late PageController pageController = PageController(keepPage: true);
   late BuildContext ctx;
   late int pointDownPage;
+  double posY = 0;
+  Timer? _layoutTimer;
+  int _layoutGen = 0;
+
   @override
   Reader build(arg) {
+    ref.onDispose(() => _layoutTimer?.cancel());
     final themeId = sp.getString("themeId");
+    final mode = sp.getString("readerScrollMode") ?? "horizontal";
     final textStyle = TextStyle(
         fontSize: sp.getDouble("fontSize") ?? 18,
-        height: sp.getDouble("lineHeight") ?? 1.7);
+        height: sp.getDouble("fontHeight") ?? sp.getDouble("lineHeight") ?? 1.7,
+        fontFamily: sp.getString("fontFamily"));
     return Reader(
         name: arg.$1,
         aid: arg.$2,
         cIndex: arg.$3,
         themeId: themeId ?? "mulberry",
-        textStyle: textStyle);
+        textStyle: textStyle,
+        config: ReaderConfig(
+          horizontalScroll: mode == "horizontal",
+          verticalScroll: mode == "vertical",
+          flickScroll: mode == "flick",
+          simulationScroll: mode == "simulation",
+          buttonScroll: sp.getBool("readerVolumeTurn") ?? false,
+        ));
   }
 
   void init(BuildContext context, int cIndex) async {
@@ -275,8 +293,11 @@ class ReaderNotifier
         return (false, textLine);
       }
     },
-        padding:
-            const EdgeInsets.only(left: 20, right: 20, bottom: 64, top: 36));
+        padding: EdgeInsets.only(
+            left: sp.getDouble("pageMargin") ?? 20,
+            right: sp.getDouble("pageMargin") ?? 20,
+            bottom: 64,
+            top: 36));
     var t = DateTime.now();
     Log.e('共${list.length}页，用时${t.difference(s).inMilliseconds}ms', "计算分页");
     return list;
@@ -335,16 +356,19 @@ class ReaderNotifier
   }
 
   void initPages({int? cIndex, int? pIndex}) async {
+    await AppFonts.ensureLoaded();
     final pages = await getPages(ci: cIndex ?? state.cIndex);
     int pageIndex = 0;
     if (metaFile.existsSync()) {
       final meta =
           RecordMeta.fromJson(json.decode(metaFile.readAsStringSync()));
       pageIndex = getPageIndex(meta.pIndex, pages);
+      if (pageIndex < 0) pageIndex = 0;
+      final chapter = cIndex ?? state.cIndex;
       Future(() {
         ref.read(progressProvider.notifier).update(ChapterProgress(
-            chapterIndex: 0,
-            totalPages: pages.length,
+            chapterIndex: chapter,
+            totalPages: pages.isEmpty ? 1 : pages.length,
             currentIndex: pageIndex));
       });
     }
@@ -421,13 +445,15 @@ class ReaderNotifier
     if (state.pages.isEmpty) return;
     final page = pageController.page!.round();
     final values = Map.from((state.pages[page].key as ValueKey).value);
-    int currentChapterIndex = values['cIndex'];
-    int currentChapterPages = values['allPages'];
+    final currentChapterIndex = values['cIndex'] as int;
+    final currentChapterPages = values['allPages'] as int;
+    // pIndex 是段落偏移，不是页码。页码按这一章里的第几页算。
+    final pageInChapter = _visualPage(page);
     Future(() {
       ref.read(progressProvider.notifier).update(ChapterProgress(
-          chapterIndex: 0,
-          totalPages: currentChapterPages,
-          currentIndex: currentChapterIndex));
+          chapterIndex: currentChapterIndex,
+          totalPages: currentChapterPages < 1 ? 1 : currentChapterPages,
+          currentIndex: pageInChapter));
     });
     if (state.cIndex != currentChapterIndex) {
       Future(() {
@@ -447,18 +473,20 @@ class ReaderNotifier
   }
 
   onPointerMove(PointerMoveEvent event) {
+    if (state.config.simulationScroll) return;
     if (ref.read(readerMenuStateProvider).subMenusVisible) {
       return;
     }
     if (ref.read(readerMenuStateProvider).parentMenuVisible) {
       return;
     }
-    // Log.e(event.delta.dx);
-    // 当移动距离 posX 大于 5 个像素的时候开始跟随
-    final dx = event.position.dx - posX;
-    if (dx.abs() > 5) {
+    if (state.config.flickScroll) return;
+    final vertical = state.config.verticalScroll;
+    final delta = vertical ? event.position.dy - posY : event.position.dx - posX;
+    final fingerDelta = vertical ? event.delta.dy : event.delta.dx;
+    if (delta.abs() > 5) {
       // 最后一章和第一章禁止额外滚动
-      double offset = pageController.offset - event.delta.dx;
+      double offset = pageController.offset - fingerDelta;
       if (offset <= 0) {
         offset = 0;
       } else {
@@ -470,23 +498,8 @@ class ReaderNotifier
     }
   }
 
-  _checkFirstPage() {
-    if (pageController.offset == 0) {
-      // Show.error("前面什么都木有~");
-      return true;
-    }
-    return false;
-  }
-
-  _checkLastPage() {
-    if (pageController.offset == pageController.position.maxScrollExtent) {
-      Show.error("已经是最后一页了~");
-      return true;
-    }
-    return false;
-  }
-
   onPointerUp(PointerUpEvent event) {
+    if (state.config.simulationScroll) return;
     // 如果子菜单开启，则不响应翻页 只关闭子菜单
     if (ref.read(readerMenuStateProvider).subMenusVisible) {
       ref.read(readerMenuStateProvider.notifier).dispatch(
@@ -506,10 +519,17 @@ class ReaderNotifier
     }
     final dx = event.position.dx;
     final dy = event.position.dy;
+    final vertical = state.config.verticalScroll;
+    final silent = state.config.flickScroll;
     final deltaX = dx - posX;
+    final deltaY = dy - posY;
+    // 静默模式不跟手，上下滑和左右滑都按位移更大的方向翻页。
+    final travel = vertical || (silent && deltaY.abs() > deltaX.abs())
+        ? deltaY
+        : deltaX;
     // Log.e(dx);
     // 检测 dx 绝对值
-    if (deltaX.abs() < 5) {
+    if (travel.abs() < 5) {
       // 如果开启了子菜单，则隐藏子菜单
       if (ref.read(readerMenuStateProvider).subMenusVisible) {
         ref.read(readerMenuStateProvider.notifier).dispatch(
@@ -527,49 +547,53 @@ class ReaderNotifier
           ref.read(readerMenuStateProvider.notifier).toggleInitialBars();
         } else {
           // 仅在屏幕中央 1/3 的区域内点击才会触发菜单栏
-          if ((dy > screenHeight / 3 && dy < screenHeight / 3 * 2) &&
-              (dx > screenWidth / 3 && dx < screenWidth / 3 * 2)) {
-            // ref.read(readerMenuStateProvider.notifier).toggleBottomAndTop();
+          final inCenter = vertical
+              ? (dy > screenHeight / 3 && dy < screenHeight / 3 * 2)
+              : (dy > screenHeight / 3 && dy < screenHeight / 3 * 2) &&
+                  (dx > screenWidth / 3 && dx < screenWidth / 3 * 2);
+          if (inCenter) {
             ref.read(readerMenuStateProvider.notifier).toggleInitialBars();
-          }
-          // 如果点击屏幕右侧 1/3 则翻到下一页
-          else if (dx > screenWidth / 3 * 2) {
-            if (_checkLastPage()) return;
-            pageController.nextPage(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeInOut);
-          }
-          // 如果点击左侧 1/3 翻到上一页
-          else if (dx < screenWidth / 3) {
-            if (_checkFirstPage()) return;
-            pageController.previousPage(
-                duration: const Duration(milliseconds: 240),
-                curve: Curves.easeInOut);
+          } else if (vertical
+              ? dy > screenHeight / 3 * 2
+              : dx > screenWidth / 3 * 2) {
+            _turnFrom(pointDownPage + 1, animated: !silent);
+          } else if (vertical ? dy < screenHeight / 3 : dx < screenWidth / 3) {
+            _turnFrom(pointDownPage - 1, animated: !silent);
           }
         }
       }
     } else {
-      if (deltaX < -10) {
-        if (_checkLastPage()) return;
-        pageController.animateToPage(pointDownPage + 1,
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeInOut);
-      } else if (deltaX > 10) {
-        if (_checkFirstPage()) return;
-        pageController.animateToPage(pointDownPage - 1,
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeInOut);
-      } else {
-        pageController.animateToPage(pointDownPage,
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeInOut);
+      if (travel < -10) {
+        _turnFrom(pointDownPage + 1, animated: !silent);
+      } else if (travel > 10) {
+        _turnFrom(pointDownPage - 1, animated: !silent);
+      } else if (!silent) {
+        _turnFrom(pointDownPage, animated: true);
       }
     }
   }
 
   onPointerDown(PointerDownEvent event) {
+    if (state.config.simulationScroll) return;
     posX = event.position.dx;
-    pointDownPage = pageController.page!.round();
+    posY = event.position.dy;
+    pointDownPage =
+        pageController.hasClients ? (pageController.page?.round() ?? 0) : 0;
+  }
+
+  void _turnFrom(int page, {required bool animated}) {
+    if (!pageController.hasClients || state.pages.isEmpty) return;
+    if (page < 0) return;
+    if (page >= state.pages.length) {
+      Show.error("已经是最后一页了~");
+      return;
+    }
+    if (animated) {
+      pageController.animateToPage(page,
+          duration: const Duration(milliseconds: 240), curve: Curves.easeInOut);
+    } else {
+      pageController.jumpToPage(page);
+    }
   }
 
   void refresh({int? cIndex}) async {
@@ -593,28 +617,64 @@ class ReaderNotifier
   }
 
   void nextPage() {
-    if (_checkLastPage()) return;
-    pageController.nextPage(
-        duration: const Duration(milliseconds: 0), curve: Curves.easeInOut);
+    if (!pageController.hasClients) return;
+    _turnFrom((pageController.page?.round() ?? 0) + 1, animated: false);
   }
 
   void previousPage() {
-    if (_checkFirstPage()) return;
-    pageController.previousPage(
-        duration: const Duration(milliseconds: 0), curve: Curves.easeInOut);
+    if (!pageController.hasClients) return;
+    _turnFrom((pageController.page?.round() ?? 0) - 1, animated: false);
   }
 
-  void jumpToPage(int index) {
-    final currentIndex = pageController.page!.round();
-    pageController.jumpToPage(currentIndex + index);
+  void commitSimulationTurn(int delta) {
+    if (!pageController.hasClients || delta == 0) return;
+    _turnFrom((pageController.page?.round() ?? 0) + delta, animated: false);
+  }
+
+  Map<dynamic, dynamic> _pageMap(int index) {
+    return Map.from((state.pages[index].key as ValueKey).value);
+  }
+
+  /// 当前页在这一章中的序号，从 0 开始。不要用 pIndex，那是段落偏移。
+  int _visualPage(int globalIndex) {
+    final chapter = _pageMap(globalIndex)['cIndex'];
+    var number = 0;
+    for (var i = 0; i < globalIndex; i++) {
+      if (_pageMap(i)['cIndex'] == chapter) number++;
+    }
+    return number;
+  }
+
+  void jumpToPage(int pageInChapter) {
+    if (!pageController.hasClients || state.pages.isEmpty) return;
+    final current =
+        (pageController.page ?? 0).round().clamp(0, state.pages.length - 1);
+    final chapter = _pageMap(current)['cIndex'];
+    final indexes = <int>[];
+    for (var i = 0; i < state.pages.length; i++) {
+      if (_pageMap(i)['cIndex'] == chapter) indexes.add(i);
+    }
+    if (pageInChapter < 0 || pageInChapter >= indexes.length) return;
+    final target = indexes[pageInChapter];
+    if (target != current) {
+      pageController.jumpToPage(target);
+    }
+    final item = _pageMap(target);
+    final pages = item['allPages'] as int;
+    ref.read(progressProvider.notifier).update(ChapterProgress(
+        chapterIndex: item['cIndex'] as int,
+        totalPages: pages < 1 ? 1 : pages,
+        currentIndex: pageInChapter));
   }
 
   void jumpToIndex(int index) {
+    if (index < 0 || index >= state.catalog.length) return;
     refresh(cIndex: index);
   }
 
   void updateTheme(String themeId) {
     state = state.copyWith(themeId: themeId);
+    _scheduleRelayout();
   }
 
   void update(Reader reader) {
@@ -623,7 +683,43 @@ class ReaderNotifier
 
   void updateTextStyle(TextStyle textStyle) {
     state = state.copyWith(textStyle: textStyle);
-    refresh();
+    _scheduleRelayout();
+  }
+
+  void _scheduleRelayout() {
+    _layoutTimer?.cancel();
+    _layoutTimer = Timer(const Duration(milliseconds: 80), relayoutKeepingPlace);
+  }
+
+  Future<void> relayoutKeepingPlace() async {
+    if (state.catalog.isEmpty || state.pages.isEmpty) return;
+    final gen = ++_layoutGen;
+    int? paragraph;
+    int? chapter;
+    if (pageController.hasClients) {
+      final page = pageController.page?.round() ?? 0;
+      if (page >= 0 && page < state.pages.length) {
+        final values = Map.from((state.pages[page].key as ValueKey).value);
+        paragraph = values['pIndex'] as int?;
+        chapter = values['cIndex'] as int?;
+      }
+    }
+    final pages = await getPages(ci: chapter ?? state.cIndex);
+    if (gen != _layoutGen || pages.isEmpty) return;
+    var target = 0;
+    if (paragraph != null) {
+      final found = pages.indexWhere((element) {
+        final values = Map.from((element.key as ValueKey).value);
+        return values['pIndex'] == paragraph &&
+            (chapter == null || values['cIndex'] == chapter);
+      });
+      if (found >= 0) target = found;
+    }
+    state = state.copyWith(pages: pages);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!pageController.hasClients || pages.isEmpty) return;
+      pageController.jumpToPage(target.clamp(0, pages.length - 1));
+    });
   }
 
   void updateConfig({
@@ -661,17 +757,37 @@ class ReaderNotifier
       fs = false;
       ss = true;
     }
+    final wasVertical = state.config.verticalScroll;
+    if (wasVertical != vs && pageController.hasClients) {
+      final page = pageController.page?.round() ?? 0;
+      final old = pageController;
+      pageController = PageController(initialPage: page);
+      WidgetsBinding.instance.addPostFrameCallback((_) => old.dispose());
+    }
+    final nextButton = buttonScroll ?? state.config.buttonScroll;
+    if (buttonScroll != null) {
+      VolumeKeys.setIntercept(nextButton).then((_) {}, onError: (_) {});
+    }
     state = state.copyWith(
         config: state.config.copyWith(
       horizontalScroll: hs,
       verticalScroll: vs,
       flickScroll: fs,
       simulationScroll: ss,
-      buttonScroll: buttonScroll ?? state.config.buttonScroll,
+      buttonScroll: nextButton,
       globalNext: globalNext ?? state.config.globalNext,
       fullScreen: fullScreen ?? state.config.fullScreen,
       keepScreenOn: keepScreenOn ?? state.config.keepScreenOn,
     ));
+    final mode = vs
+        ? "vertical"
+        : fs
+            ? "flick"
+            : ss
+                ? "simulation"
+                : "horizontal";
+    sp.setString("readerScrollMode", mode);
+    sp.setBool("readerVolumeTurn", nextButton);
   }
 }
 
@@ -685,6 +801,7 @@ final List<ReaderTheme> readerThemes = [
   ReaderTheme(name: '冰川', id: "glacier", theme: glacierTheme),
   ReaderTheme(name: '樱桃', id: "cherry", theme: cherryTheme),
   ReaderTheme(name: '胡桃', id: "walnut", theme: walnutTheme),
+  ReaderTheme(name: '暗夜', id: "night", theme: nightTheme),
 ];
 
 final loadingProvider = StateProvider.autoDispose<bool>((ref) {

@@ -24,7 +24,7 @@ class _AddModalState extends ConsumerState<AddModal> {
           const Padding(
             padding: EdgeInsets.only(bottom: 16, top: 4),
             child: Text(
-              "添加书籍",
+              "发现",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
             ),
           ),
@@ -83,13 +83,6 @@ class _AddModalState extends ConsumerState<AddModal> {
                     widget.controller.dismiss();
                     GoRouter.of(context).push("/rank/lastupdate/最近更新");
                   }),
-              buildButton(
-                  title: "搜索书籍",
-                  icon: "assets/svg/ic_topbar_search.svg",
-                  onTap: () {
-                    widget.controller.dismiss();
-                    GoRouter.of(context).push("/search");
-                  }),
             ],
           ),
           FilledButton.tonal(
@@ -123,6 +116,10 @@ class _AddModalState extends ConsumerState<AddModal> {
                   icon,
                   width: 28,
                   height: 28,
+                  colorFilter: ColorFilter.mode(
+                    Theme.of(context).colorScheme.onSurface,
+                    BlendMode.srcIn,
+                  ),
                 ),
               ),
             ),

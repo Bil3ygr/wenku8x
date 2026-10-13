@@ -11,6 +11,7 @@ import 'package:wenku8x/screen/detail/detail_provider.dart';
 import 'package:wenku8x/screen/home/home_provider.dart';
 import 'package:wenku8x/theme/extend.dart';
 import 'package:wenku8x/utils/flash.dart';
+import 'package:wenku8x/utils/util.dart';
 
 class DetailScreen extends StatefulHookConsumerWidget {
   const DetailScreen(this.bookItem, {super.key});
@@ -127,6 +128,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                         children: [
                           CachedNetworkImage(
                             imageUrl: detail.cover!,
+                            httpHeaders: Util.imageHeaders,
                             width: 98,
                             height: 140,
                             fit: BoxFit.cover,

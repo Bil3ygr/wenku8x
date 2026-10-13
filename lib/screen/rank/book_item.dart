@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:wenku8x/screen/home/home_provider.dart';
 import 'package:wenku8x/service/navigation.dart';
+import 'package:wenku8x/utils/util.dart';
 
 class BookItemComp extends StatefulHookConsumerWidget {
   const BookItemComp(this.bookItem, {super.key, this.onItemTap});
@@ -42,7 +43,12 @@ class _BookItemCompState extends ConsumerState<BookItemComp>
                 borderRadius: BorderRadius.circular(5),
                 child: CachedNetworkImage(
                   imageUrl: widget.bookItem.cover!,
+                  httpHeaders: Util.imageHeaders,
                   fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => Icon(
+                    Icons.menu_book_outlined,
+                    color: colorScheme.onSurface.withOpacity(0.4),
+                  ),
                 ),
               ),
             ),

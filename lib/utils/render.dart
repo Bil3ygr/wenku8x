@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:wenku8x/utils/util.dart';
 
 class RenderUtil {
   static splitRichText(context,
@@ -107,6 +108,7 @@ class RenderUtil {
             alignment: Alignment.center,
             child: CachedNetworkImage(
               imageUrl: textLine,
+              httpHeaders: Util.imageHeaders,
               // width: renderWidth,
             ),
           )),

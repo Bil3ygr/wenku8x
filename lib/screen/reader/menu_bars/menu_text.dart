@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:wenku8x/main.dart';
+import 'package:wenku8x/utils/reader_fonts.dart';
 
 import '../reader_provider.dart';
 
@@ -33,6 +34,20 @@ class _MenuTextState extends ConsumerState<MenuText>
     final reader = ref.watch<Reader>(widget.provider);
     final sizeVal = useState(reader.textStyle.fontSize ?? 17.0);
     final heightVal = useState(reader.textStyle.height ?? 1.7);
+    final marginVal = useState(sp.getDouble("pageMargin") ?? 20);
+    final fontKey = useMemoized(GlobalKey.new);
+    final marginKey = useMemoized(GlobalKey.new);
+    final fontName = reader.textStyle.fontFamily ?? "系统字体";
+    void applyStyle(TextStyle style) {
+      ref.read(widget.provider.notifier).updateTextStyle(style);
+      sp.setDouble("fontSize", style.fontSize ?? 18);
+      sp.setDouble("fontHeight", style.height ?? 1.7);
+      if (style.fontFamily == null) {
+        sp.remove("fontFamily");
+      } else {
+        sp.setString("fontFamily", style.fontFamily!);
+      }
+    }
     return AnimatedPositioned(
         duration: const Duration(milliseconds: 200),
         left: 0,
@@ -62,7 +77,11 @@ class _MenuTextState extends ConsumerState<MenuText>
                         Icons.text_decrease,
                         color: Theme.of(context).colorScheme.secondary,
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        final next = (sizeVal.value - 1).clamp(14.0, 32.0);
+                        sizeVal.value = next;
+                        applyStyle(reader.textStyle.copyWith(fontSize: next));
+                      },
                     ),
                   ),
                   Flexible(
@@ -86,13 +105,8 @@ class _MenuTextState extends ConsumerState<MenuText>
                             max: 32,
                             onChanged: (val) {
                               sizeVal.value = val;
-                            },
-                            onChangeEnd: (val) {
-                              ref
-                                  .read(widget.provider.notifier)
-                                  .updateTextStyle(
-                                      reader.textStyle.copyWith(fontSize: val));
-                              sp.setDouble('fontSize', val);
+                              applyStyle(
+                                  reader.textStyle.copyWith(fontSize: val));
                             })),
                   ),
                   Padding(
@@ -102,7 +116,11 @@ class _MenuTextState extends ConsumerState<MenuText>
                         Icons.text_increase,
                         color: Theme.of(context).colorScheme.secondary,
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        final next = (sizeVal.value + 1).clamp(14.0, 32.0);
+                        sizeVal.value = next;
+                        applyStyle(reader.textStyle.copyWith(fontSize: next));
+                      },
                     ),
                   ),
                 ],
@@ -119,7 +137,11 @@ class _MenuTextState extends ConsumerState<MenuText>
                         Icons.drag_handle,
                         color: Theme.of(context).colorScheme.secondary,
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        final next = (heightVal.value - 0.1).clamp(1.3, 2.5);
+                        heightVal.value = next;
+                        applyStyle(reader.textStyle.copyWith(height: next));
+                      },
                     ),
                   ),
                   Flexible(
@@ -143,13 +165,8 @@ class _MenuTextState extends ConsumerState<MenuText>
                             max: 2.5,
                             onChanged: (val) {
                               heightVal.value = val;
-                            },
-                            onChangeEnd: (val) {
-                              ref
-                                  .read(widget.provider.notifier)
-                                  .updateTextStyle(
-                                      reader.textStyle.copyWith(height: val));
-                              sp.setDouble('fontHeight', val);
+                              applyStyle(
+                                  reader.textStyle.copyWith(height: val));
                             })),
                   ),
                   Padding(
@@ -159,7 +176,11 @@ class _MenuTextState extends ConsumerState<MenuText>
                         Icons.menu,
                         color: Theme.of(context).colorScheme.secondary,
                       ),
-                      onPressed: () {},
+                      onPressed: () {
+                        final next = (heightVal.value + 0.1).clamp(1.3, 2.5);
+                        heightVal.value = next;
+                        applyStyle(reader.textStyle.copyWith(height: next));
+                      },
                     ),
                   ),
                 ],
@@ -183,6 +204,7 @@ class _MenuTextState extends ConsumerState<MenuText>
                           ),
                           Expanded(
                             child: TextButton(
+                                key: fontKey,
                                 style: TextButton.styleFrom(
                                   shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(30)),
@@ -190,11 +212,48 @@ class _MenuTextState extends ConsumerState<MenuText>
                                       Theme.of(context).colorScheme.background,
                                   minimumSize: const Size(148, 24),
                                 ),
-                                onPressed: () {},
+                                onPressed: () async {
+                                  await AppFonts.ensureLoaded();
+                                  if (!context.mounted) return;
+                                  final families = [...AppFonts.families]
+                                    ..sort();
+                                  final selected = await _showAnchoredMenu<String>(
+                                    context: context,
+                                    anchor: fontKey,
+                                    items: [
+                                      _choice<String>(
+                                        context,
+                                        value: "",
+                                        label: "系统字体",
+                                        selected: reader.textStyle.fontFamily ==
+                                            null,
+                                      ),
+                                      for (final name in families)
+                                        _choice<String>(
+                                          context,
+                                          value: name,
+                                          label: name,
+                                          selected: reader.textStyle.fontFamily ==
+                                              name,
+                                          fontFamily: name,
+                                        ),
+                                    ],
+                                  );
+                                  if (selected == null || !context.mounted) return;
+                                  applyStyle(TextStyle(
+                                    fontSize: reader.textStyle.fontSize,
+                                    height: reader.textStyle.height,
+                                    fontFamily:
+                                        selected.isEmpty ? null : selected,
+                                  ));
+                                },
                                 child: Text(
-                                  "系统字体",
+                                  fontName,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                       fontSize: 12,
+                                      fontFamily: reader.textStyle.fontFamily,
                                       color: Theme.of(context)
                                           .colorScheme
                                           .secondary),
@@ -220,6 +279,7 @@ class _MenuTextState extends ConsumerState<MenuText>
                           ),
                           Expanded(
                               child: TextButton(
+                                  key: marginKey,
                                   style: TextButton.styleFrom(
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
@@ -229,9 +289,32 @@ class _MenuTextState extends ConsumerState<MenuText>
                                         .background,
                                     minimumSize: const Size(148, 24),
                                   ),
-                                  onPressed: () {},
+                                  onPressed: () async {
+                                    const steps = [16.0, 20.0, 24.0, 32.0, 40.0];
+                                    final selected =
+                                        await _showAnchoredMenu<double>(
+                                      context: context,
+                                      anchor: marginKey,
+                                      items: [
+                                        for (final step in steps)
+                                          _choice<double>(
+                                            context,
+                                            value: step,
+                                            label: "边距 ${step.round()}",
+                                            selected: marginVal.value.round() ==
+                                                step.round(),
+                                          ),
+                                      ],
+                                    );
+                                    if (selected == null || !context.mounted) return;
+                                    marginVal.value = selected;
+                                    sp.setDouble("pageMargin", selected);
+                                    ref
+                                        .read(widget.provider.notifier)
+                                        .relayoutKeepingPlace();
+                                  },
                                   child: Text(
-                                    "页面边距",
+                                    "边距 ${marginVal.value.round()}",
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Theme.of(context)
@@ -247,4 +330,57 @@ class _MenuTextState extends ConsumerState<MenuText>
               )
             ])));
   }
+}
+
+PopupMenuItem<T> _choice<T>(
+  BuildContext context, {
+  required T value,
+  required String label,
+  required bool selected,
+  String? fontFamily,
+}) {
+  final scheme = Theme.of(context).colorScheme;
+  return PopupMenuItem<T>(
+    value: value,
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: fontFamily,
+              fontSize: 15,
+              color: selected ? scheme.primary : scheme.onSurface,
+            ),
+          ),
+        ),
+        if (selected) Icon(Icons.check, size: 18, color: scheme.primary),
+      ],
+    ),
+  );
+}
+
+Future<T?> _showAnchoredMenu<T>({
+  required BuildContext context,
+  required GlobalKey anchor,
+  required List<PopupMenuEntry<T>> items,
+}) {
+  final box = anchor.currentContext?.findRenderObject() as RenderBox?;
+  final overlay =
+      Navigator.of(context).overlay?.context.findRenderObject() as RenderBox?;
+  if (box == null || overlay == null || !box.hasSize) {
+    return Future.value();
+  }
+  final rect = Rect.fromPoints(
+    box.localToGlobal(Offset.zero, ancestor: overlay),
+    box.localToGlobal(box.size.bottomRight(Offset.zero), ancestor: overlay),
+  );
+  return showMenu<T>(
+    context: context,
+    position: RelativeRect.fromRect(rect, Offset.zero & overlay.size),
+    constraints: const BoxConstraints(minWidth: 168, maxWidth: 240, maxHeight: 320),
+    items: items,
+  );
 }

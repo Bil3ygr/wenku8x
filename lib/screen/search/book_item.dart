@@ -51,7 +51,12 @@ class _BookItemCompState extends ConsumerState<BookItemComp>
                 borderRadius: BorderRadius.circular(5),
                 child: CachedNetworkImage(
                   imageUrl: cover,
+                  httpHeaders: Util.imageHeaders,
                   fit: BoxFit.cover,
+                  errorWidget: (context, url, error) => Icon(
+                    Icons.menu_book_outlined,
+                    color: colorScheme.onSurface.withOpacity(0.4),
+                  ),
                 ),
               ),
             ),

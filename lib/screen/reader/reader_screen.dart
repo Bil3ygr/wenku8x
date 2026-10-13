@@ -1,10 +1,14 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:wenku8x/service/volume_keys.dart';
 import 'package:wenku8x/screen/reader/menu_bars/menu_catalog.dart';
+import 'package:wenku8x/screen/reader/simulation_reader.dart';
+import 'package:wenku8x/utils/flash.dart';
 import 'package:wenku8x/screen/reader/menu_bars/menu_config.dart';
 import 'package:wenku8x/screen/reader/menu_bars/menu_text.dart';
 import 'package:wenku8x/screen/reader/menu_bars/menu_top.dart';
@@ -35,6 +39,64 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
     final provider = readerProvider((widget.name, widget.aid, widget.cIndex));
     final reader = ref.watch(provider);
     final loading = ref.watch(loadingProvider);
+    final volumeTurn = reader.config.buttonScroll;
+    final menuOpen = ref.watch(readerMenuStateProvider.select(
+        (value) => value.parentMenuVisible || value.subMenusVisible));
+    final simToken = useState(0);
+    final simToNext = useState(true);
+
+    useEffect(() {
+      var lastMs = 0;
+      void turn(bool toNext) {
+        if (!ref.read(provider).config.buttonScroll) return;
+        final now = DateTime.now().millisecondsSinceEpoch;
+        if (now - lastMs < 220) return;
+        lastMs = now;
+        if (ref.read(provider).config.simulationScroll) {
+          simToNext.value = toNext;
+          simToken.value++;
+          return;
+        }
+        final notifier = ref.read(provider.notifier);
+        if (toNext) {
+          notifier.nextPage();
+        } else {
+          notifier.previousPage();
+        }
+      }
+
+      VolumeKeys.listen((key) {
+        if (key == "up") {
+          turn(false);
+        } else if (key == "down") {
+          turn(true);
+        }
+      });
+
+      bool onHardware(KeyEvent event) {
+        final key = event.logicalKey;
+        final isVolume = key == LogicalKeyboardKey.audioVolumeUp ||
+            key == LogicalKeyboardKey.audioVolumeDown;
+        if (!isVolume || !ref.read(provider).config.buttonScroll) return false;
+        // 松开也要标成已处理，否则系统会在回放这次按键时弹出音量条。
+        if (event is! KeyDownEvent && event is! KeyRepeatEvent) return true;
+        turn(key == LogicalKeyboardKey.audioVolumeDown);
+        return true;
+      }
+
+      HardwareKeyboard.instance.addHandler(onHardware);
+      return () {
+        HardwareKeyboard.instance.removeHandler(onHardware);
+        VolumeKeys.setIntercept(false);
+      };
+    }, const []);
+
+    useEffect(() {
+      VolumeKeys.setIntercept(volumeTurn).then((_) {}, onError: (Object e) {
+        if (volumeTurn) Show.error("音量键翻页未生效：$e");
+      });
+      return null;
+    }, [volumeTurn]);
 
     useEffect(() {
       Future(() {
@@ -62,11 +124,51 @@ class _ReaderScreenState extends ConsumerState<ReaderScreen> {
                     top: MediaQuery.of(context).padding.top,
                     bottom: MediaQuery.of(context).padding.bottom,
                   ),
-                  child: ScrollReader(
-                      reader.pages, ref.read(provider.notifier).pageController,
-                      loadNext: ref.read(provider.notifier).loadNextChapter,
-                      onPageScrollEnd:
-                          ref.read(provider.notifier).onPageScrollEnd),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      ScrollReader(reader.pages,
+                          ref.read(provider.notifier).pageController,
+                          axis: reader.config.verticalScroll
+                              ? Axis.vertical
+                              : Axis.horizontal,
+                          showContent: !reader.config.simulationScroll,
+                          loadNext: ref.read(provider.notifier).loadNextChapter,
+                          onPageScrollEnd:
+                              ref.read(provider.notifier).onPageScrollEnd),
+                      if (reader.config.simulationScroll)
+                        SimulationReader(
+                          pages: reader.pages,
+                          controller:
+                              ref.read(provider.notifier).pageController,
+                          menuOpen: menuOpen,
+                          onCommit:
+                              ref.read(provider.notifier).commitSimulationTurn,
+                          onMenu: () => ref
+                              .read(readerMenuStateProvider.notifier)
+                              .toggleInitialBars(),
+                          turnToken: simToken.value,
+                          turnToNext: simToNext.value,
+                          onDismissMenu: () {
+                            final menu = ref.read(readerMenuStateProvider);
+                            final notifier =
+                                ref.read(readerMenuStateProvider.notifier);
+                            if (menu.subMenusVisible) {
+                              notifier.dispatch(
+                                menuCatalogVisible: false,
+                                menuThemeVisible: false,
+                                menuTextVisible: false,
+                                menuConfigVisible: false,
+                                menuTopVisible: true,
+                                menuBottomVisible: true,
+                              );
+                            } else if (menu.parentMenuVisible) {
+                              notifier.reset();
+                            }
+                          },
+                        ),
+                    ],
+                  ),
                 )),
             const MenuBottom(),
             ProgressBar(provider),

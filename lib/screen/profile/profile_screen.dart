@@ -21,6 +21,18 @@ class ProfileScreen extends StatefulHookConsumerWidget {
   ConsumerState<ConsumerStatefulWidget> createState() => _ProfileScreenState();
 }
 
+Widget _profileFallback(BuildContext context) {
+  return Container(
+    width: 64,
+    height: 64,
+    color: Theme.of(context).colorScheme.secondaryContainer,
+    child: Icon(
+      Icons.person,
+      color: Theme.of(context).colorScheme.onSecondaryContainer,
+    ),
+  );
+}
+
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
@@ -54,19 +66,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                             Row(
                               children: [
                                 ClipOval(
-                                    child: Image.file(
-                                  avatarFile.data ??
-                                      File("assets/image/akari.jpg"),
-                                  width: 64,
-                                  height: 64,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Image.asset(
-                                      "assets/image/akari.jpg",
-                                      width: 64,
-                                      height: 64,
-                                    );
-                                  },
-                                )),
+                                  child: avatarFile.data == null
+                                      ? _profileFallback(context)
+                                      : Image.file(
+                                          avatarFile.data!,
+                                          width: 64,
+                                          height: 64,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                            return _profileFallback(context);
+                                          },
+                                        ),
+                                ),
                                 const SizedBox(
                                   width: 16,
                                 ),
@@ -85,7 +97,17 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                                           height: 1.8),
                                     ),
                                     Text(
-                                      "${profile.rank!}\t/\t${profile.score!}积分",
+                                      "用户ID ${profile.score ?? 0}",
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .secondary
+                                            .withOpacity(0.7),
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                    Text(
+                                      "积分 ${profile.rank ?? "-"}",
                                       style: TextStyle(
                                         color: Theme.of(context)
                                             .colorScheme
@@ -171,8 +193,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 )),
               SliverToBoxAdapter(
                   child: SwitchCard(
-                title: "壁纸主题",
-                subtitle: "Material You主题可根据当前壁纸派生自定义配色主题（限Android12+）",
+                title: "壁纸配色",
+                subtitle: "跟随系统从壁纸提取的颜色，自动生成一套应用配色（Android 12 及以上）",
                 value: config.dynamicColor,
                 onChanged: (value) {
                   // 添加一个微小的延时，避免重构时引起的闪烁掉帧

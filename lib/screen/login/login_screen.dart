@@ -5,6 +5,7 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:wenku8x/http/ajax.dart';
 import 'package:wenku8x/http/api.dart';
 import 'package:wenku8x/main.dart';
 import 'package:wenku8x/service/navigation.dart';
@@ -127,13 +128,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           Future.delayed(const Duration(milliseconds: 500))
                               .then((_) {
                             completer.complete();
-                            if (res) {
+                            if (Ajax.isLoginSuccess(res)) {
                               sp.setString("username", usernameController.text);
                               sp.setString("password", passwordController.text);
                               GoRouter.of(context).go("/");
                             } else {
                               // ignore: use_build_context_synchronously
-                              Show.error("登录失败，用户名或密码错误");
+                              Show.error(res.toString());
                             }
                           });
                         },
