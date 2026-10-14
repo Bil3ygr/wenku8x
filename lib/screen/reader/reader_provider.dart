@@ -16,6 +16,7 @@ import 'package:wenku8x/screen/reader/themes/mulberry.dart';
 import 'package:wenku8x/screen/reader/themes/night.dart';
 import 'package:wenku8x/screen/reader/themes/spring.dart';
 import 'package:wenku8x/screen/reader/themes/walnut.dart';
+import 'package:wenku8x/service/chapter_cache.dart';
 import 'package:wenku8x/service/volume_keys.dart';
 import 'package:wenku8x/utils/reader_fonts.dart';
 import 'package:wenku8x/utils/flash.dart';
@@ -30,10 +31,38 @@ class Chapter with _$Chapter {
   const factory Chapter({
     required String cid,
     required String name,
+    /// 这一章所属的卷。接口按卷返回，卷名以前被丢掉了。
+    @Default("") String volume,
   }) = _Chapter;
 
   factory Chapter.fromJson(Map<String, dynamic> json) =>
       _$ChapterFromJson(json);
+}
+
+/// 目录里的一行：卷标题，或者某一章。
+class CatalogEntry {
+  const CatalogEntry.header(this.label) : chapterIndex = -1;
+  const CatalogEntry.chapter(this.chapterIndex) : label = "";
+
+  final String label;
+  final int chapterIndex;
+
+  bool get isHeader => chapterIndex < 0;
+}
+
+/// 卷名变化时插入一行标题，章节序号仍是整本书里的序号。
+List<CatalogEntry> catalogEntries(List<Chapter> chapters) {
+  final rows = <CatalogEntry>[];
+  String? previous;
+  for (var i = 0; i < chapters.length; i++) {
+    final volume = chapters[i].volume;
+    if (volume.isNotEmpty && volume != previous) {
+      rows.add(CatalogEntry.header(volume));
+      previous = volume;
+    }
+    rows.add(CatalogEntry.chapter(i));
+  }
+  return rows;
 }
 
 @freezed
@@ -243,16 +272,27 @@ class ReaderNotifier
             : const RecordMeta());
     final file = File("${bookDir.path}/catalog.json");
     List<Chapter> chapters = [];
+    var refreshCatalog = !file.existsSync();
     if (file.existsSync()) {
-      // 如果存在目录文件，直接从文件读取并更新目录
-      chapters =
-          (json.decode(file.readAsStringSync()) as List<dynamic>).map((e) {
-        return Chapter(cid: e['cid'], name: e['name']);
-      }).toList();
-    } else {
+      final decoded = json.decode(file.readAsStringSync());
+      if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+        chapters = [
+          for (final item in decoded)
+            Chapter.fromJson(Map<String, dynamic>.from(item as Map))
+        ];
+        // 旧目录没有卷名，下一卷的序章会紧挨着上一卷的尾章。
+        refreshCatalog = !(decoded.first as Map).containsKey('volume');
+      } else {
+        refreshCatalog = true;
+      }
+    }
+    if (refreshCatalog) {
       if (!bookDir.existsSync()) bookDir.createSync(recursive: true);
-      chapters = await API.getNovelIndex(state.aid);
-      file.writeAsString(jsonEncode(chapters));
+      final fresh = await API.getNovelIndex(state.aid);
+      if (fresh.isNotEmpty) {
+        chapters = fresh;
+        file.writeAsString(jsonEncode(chapters));
+      }
     }
     state = state.copyWith(catalog: chapters, cIndex: recordMeta.cIndex);
   }
@@ -260,15 +300,24 @@ class ReaderNotifier
   Future<(List<String>, String)> fetchContentTextAndTitle(int? ci) async {
     final index = ci ?? state.cIndex;
     final cid = state.catalog[index].cid;
-    final file = File("${bookDir.path}/$cid.txt");
-    String text = file.existsSync()
-        ? file.readAsStringSync()
-        : await API.getNovelContent(state.aid, cid);
-    // String text = await API.getNovelContent(state.aid, cid);
+    final text = await ref
+        .read(chapterCacheProvider(state.aid).notifier)
+        .ensureText(cid);
     List<String> textArr = text.split(RegExp(r"\n\s*|\s{2,}"));
-    textArr.removeRange(0, 2);
-    file.writeAsString(text);
+    if (textArr.length >= 2) textArr.removeRange(0, 2);
     return (textArr, state.catalog[index].name);
+  }
+
+  /// 进入某一章时，把上一章和下一章写入本地。不挡当前章的显示。
+  void _cacheNeighbors(int index) {
+    if (state.catalog.isEmpty) return;
+    final cids = <String>[];
+    if (index > 0) cids.add(state.catalog[index - 1].cid);
+    if (index + 1 < state.catalog.length) {
+      cids.add(state.catalog[index + 1].cid);
+    }
+    if (cids.isEmpty) return;
+    ref.read(chapterCacheProvider(state.aid).notifier).cacheCids(cids);
   }
 
   List<Widget> splitPages(
@@ -378,6 +427,7 @@ class ReaderNotifier
     //     keepPage: true);
     initCIndex = null;
     state = state.copyWith(pages: pages, cIndex: cIndex ?? state.cIndex);
+    _cacheNeighbors(cIndex ?? state.cIndex);
     _checkLoadingExtra(pIndex: pIndex ?? pageIndex).then((_) {
       Future.delayed(const Duration(milliseconds: 100)).then((_) {
         _updateRecordMeta();
@@ -459,6 +509,7 @@ class ReaderNotifier
       Future(() {
         state = state.copyWith(cIndex: currentChapterIndex);
       });
+      _cacheNeighbors(currentChapterIndex);
     }
     if (page == state.pages.length - 1) {
       prepareCached();

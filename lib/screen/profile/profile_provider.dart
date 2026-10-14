@@ -103,21 +103,21 @@ final profileProvider = StateProvider<UserInfo>((ref) {
   return const UserInfo(nickname: "-", rank: "-", score: 0);
 });
 
-clearCache() async {
+clearCache({required bool removeChapters}) async {
   final dir = await getApplicationDocumentsDirectory();
   final booksDir = Directory("${dir.path}/books");
-  booksDir.listSync().forEach((element) {
-    if (element.statSync().type == FileSystemEntityType.directory) {
-      (Directory(element.path))
-          .listSync()
-          .toList()
-          .where((element) => !element.path.contains("meta.json"))
-          .forEach((element) {
-        element.deleteSync();
-      });
+  if (booksDir.existsSync()) {
+    for (final book in booksDir.listSync()) {
+      if (book is! Directory) continue;
+      for (final file in book.listSync()) {
+        if (file is! File) continue;
+        if (file.path.endsWith("meta.json")) continue;
+        if (file.path.endsWith(".txt") && !removeChapters) continue;
+        file.deleteSync();
+      }
     }
-  });
-  Show.success("缓存清除成功");
+  }
+  Show.success(removeChapters ? "目录和正文缓存已清除，阅读进度仍保留" : "目录缓存已清除，正文仍保留");
 }
 
 final avatarExistProvider = StateProvider<int>((ref) {

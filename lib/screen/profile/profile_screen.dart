@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:wenku8x/http/api.dart';
 import 'package:wenku8x/screen/profile/profile_provider.dart';
+import 'package:wenku8x/service/chapter_cache.dart';
 import 'package:wenku8x/screen/profile/switch_card.dart';
 import 'package:wenku8x/screen/profile/tap_card.dart';
 import 'package:wenku8x/theme/extend.dart';
@@ -250,9 +251,61 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               SliverToBoxAdapter(
                   child: TapCard(
                       title: "清除缓存",
-                      subtitle: "移除图书的章节和目录缓存（这理应不会移除你的阅读进度）",
-                      onTap: () {
-                        clearCache();
+                      subtitle: "清除目录缓存。正文默认保留，可以在弹窗里勾选后一并删除",
+                      onTap: () async {
+                        var removeChapters = false;
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (dialogContext) {
+                            return StatefulBuilder(
+                              builder: (dialogContext, setState) {
+                                return AlertDialog(
+                                  title: const Text("清除缓存"),
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                          "会清除目录缓存，阅读进度会保留。"),
+                                      CheckboxListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        value: removeChapters,
+                                        controlAffinity:
+                                            ListTileControlAffinity.leading,
+                                        title: const Text(
+                                            "同时清除已下载和已缓存的正文"),
+                                        onChanged: (value) {
+                                          setState(() {
+                                            removeChapters = value ?? false;
+                                          });
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(
+                                              dialogContext)
+                                          .pop(false),
+                                      child: const Text("取消"),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.of(
+                                              dialogContext)
+                                          .pop(true),
+                                      child: const Text("清除"),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
+                        );
+                        if (confirmed == true) {
+                          await clearCache(removeChapters: removeChapters);
+                          ref.invalidate(chapterCacheProvider);
+                        }
                       },
                       trailing: CircleAvatar(
                         backgroundColor:

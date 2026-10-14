@@ -9,12 +9,14 @@ part of 'reader_provider.dart';
 _$_Chapter _$$_ChapterFromJson(Map<String, dynamic> json) => _$_Chapter(
       cid: json['cid'] as String,
       name: json['name'] as String,
+      volume: json['volume'] as String? ?? "",
     );
 
 Map<String, dynamic> _$$_ChapterToJson(_$_Chapter instance) =>
     <String, dynamic>{
       'cid': instance.cid,
       'name': instance.name,
+      'volume': instance.volume,
     };
 
 _$_RecordMeta _$$_RecordMetaFromJson(Map<String, dynamic> json) =>

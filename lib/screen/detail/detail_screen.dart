@@ -9,6 +9,7 @@ import 'package:wenku8x/providers/download_provider.dart';
 
 import 'package:wenku8x/screen/detail/detail_provider.dart';
 import 'package:wenku8x/screen/home/home_provider.dart';
+import 'package:wenku8x/screen/reader/reader_provider.dart';
 import 'package:wenku8x/theme/extend.dart';
 import 'package:wenku8x/utils/flash.dart';
 import 'package:wenku8x/utils/util.dart';
@@ -27,6 +28,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
     final bookItem = widget.bookItem;
     final detail = ref.watch(detailProvider(bookItem));
     final catalog = detail.catalog;
+    final catalogRows = catalog == null ? const <CatalogEntry>[] : catalogEntries(catalog);
     final showAppBarTitle = useState(false);
     final showExtendFab = useState(true);
     final scrollController = useScrollController(keepScrollOffset: true);
@@ -280,13 +282,28 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                   ),
                   SliverList.builder(
                     itemBuilder: (context, index) {
-                      final chapter = catalog[index];
+                      final row = catalogRows[index];
+                      if (row.isHeader) {
+                        return Container(
+                          alignment: Alignment.centerLeft,
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.08),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          child: Text(
+                            row.label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600),
+                          ),
+                        );
+                      }
+                      final chapter = catalog![row.chapterIndex];
                       return InkWell(
                         onTap: () {
-                          // ref
-                          //     .read(homeProvider.notifier)
-                          //     .jumpToIndex(bookItem, index);
-                          GoRouter.of(context).push("/reader/${detail.name}/${detail.aid}/$index");
+                          GoRouter.of(context)
+                              .push("/reader/${detail.name}/${detail.aid}/${row.chapterIndex}");
                         },
                         child: Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
@@ -307,7 +324,7 @@ class _DetailScreenState extends ConsumerState<DetailScreen> {
                             )),
                       );
                     },
-                    itemCount: catalog!.length,
+                    itemCount: catalogRows.length,
                   )
                 ],
               ),

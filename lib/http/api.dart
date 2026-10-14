@@ -49,25 +49,57 @@ class API {
 
   static Future<List<Chapter>> getNovelIndex(String aid) async {
     XmlDocument? res = await Ajax.post("action=book&do=list&aid=$aid&t=0");
-    List<Chapter> chapters = [];
-    if (res != null) {
-      for (var element in res.children[2].children) {
-        if (element.toString().length > 2) {
-          int i = 0;
-          for (var node in element.children) {
-            if (node.toString().length > 2) {
-              if (i != 0) {
-                chapters.add(Chapter(
-                    cid: node.getAttribute("cid").toString(),
-                    name: node.innerText));
-              }
-            }
-            i++;
-          }
-        }
+    if (res == null) return [];
+    final chapters = <Chapter>[];
+    final volumes = _volumeElements(res.rootElement);
+    final splitVolumes = volumes.length > 1;
+    for (var i = 0; i < volumes.length; i++) {
+      final volume = volumes[i];
+      var title = _volumeTitle(volume);
+      if (title.isEmpty && splitVolumes) title = "第${i + 1}卷";
+      for (final node in volume.childElements) {
+        final cid = node.getAttribute("cid")?.trim() ?? "";
+        if (cid.isEmpty || cid == "null" || cid == "0") continue;
+        final name = node.innerText.trim();
+        if (name.isEmpty) continue;
+        chapters.add(Chapter(cid: cid, name: name, volume: title));
       }
     }
     return chapters;
+  }
+
+  /// 目录按卷分组。卷节点上的标题就是每一本的名字。
+  static List<XmlElement> _volumeElements(XmlElement root) {
+    final named = root.descendants
+        .whereType<XmlElement>()
+        .where((element) => element.name.local == "volume")
+        .toList();
+    if (named.isNotEmpty) return named;
+    final withChapters = root.childElements
+        .where((element) => element.childElements
+            .any((node) => (node.getAttribute("cid") ?? "").isNotEmpty))
+        .toList();
+    if (withChapters.isNotEmpty) return withChapters;
+    if (root.childElements
+        .any((node) => (node.getAttribute("cid") ?? "").isNotEmpty)) {
+      return [root];
+    }
+    return [];
+  }
+
+  static String _volumeTitle(XmlElement volume) {
+    for (final key in ["vtitle", "title", "name", "volume"]) {
+      final value = volume.getAttribute(key)?.trim() ?? "";
+      if (value.isNotEmpty) return value;
+    }
+    for (final node in volume.childElements) {
+      final cid = node.getAttribute("cid")?.trim() ?? "";
+      if (cid.isEmpty || cid == "null" || cid == "0") {
+        final text = node.innerText.trim();
+        if (text.isNotEmpty) return text;
+      }
+    }
+    return "";
   }
 
   static getNovelContent(String aid, String cid) async {

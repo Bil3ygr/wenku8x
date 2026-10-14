@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:wenku8x/http/api.dart';
 import 'package:wenku8x/screen/reader/reader_provider.dart';
+import 'package:wenku8x/service/chapter_cache.dart';
 import 'package:wenku8x/utils/flash.dart';
 
 part 'download_provider.freezed.dart';
@@ -44,7 +45,7 @@ class BookDownloader with _$BookDownloader {
       if (status == BookDownloadStatus.finish) return "已下载";
       final chapters =
           (json.decode(file.readAsStringSync()) as List<dynamic>).map((e) {
-        return Chapter(cid: e['cid'], name: e['name']);
+        return Chapter.fromJson(Map<String, dynamic>.from(e as Map));
       }).toList();
       final percent = cachedNum / chapters.length;
       // return "${(percent * 100).toStringAsFixed(2)}%";
@@ -83,24 +84,28 @@ class BookDownloaderNotifier extends FamilyNotifier<BookDownloader, String> {
     }
     // 准备下载书籍（先获取目录）
     state = state.copyWith(status: BookDownloadStatus.preparing);
-    final docDir = (await getApplicationDocumentsDirectory()).path;
-    final bookDir = Directory("$docDir/books/$aid");
     List<Chapter> chapters = await _getCatalog(aid);
     // 开始下载
     state = state.copyWith(status: BookDownloadStatus.downloading);
-    // 下载章节
+    final cache = ref.read(chapterCacheProvider(aid).notifier);
     for (var i = 0; i < chapters.length; i++) {
-      final chapter = chapters[i];
-      final file = File("${bookDir.path}/${chapter.cid}.txt");
-      if (!file.existsSync()) {
-        if (!bookDir.existsSync()) bookDir.createSync(recursive: true);
-        final content = await API.getNovelContent(aid, chapter.cid);
-        file.writeAsString(content);
-      }
+      try {
+        await cache.ensureText(chapters[i].cid);
+      } catch (_) {}
       state = state.copyWith(cachedNum: i + 1);
     }
-    // 下载完成
-    state = state.copyWith(status: BookDownloadStatus.finish);
+    final docDir = (await getApplicationDocumentsDirectory()).path;
+    final bookDir = Directory("$docDir/books/$aid");
+    final done = chapters.where((chapter) {
+      final file = File("${bookDir.path}/${chapter.cid}.txt");
+      return file.existsSync() && file.lengthSync() > 0;
+    }).length;
+    state = state.copyWith(
+      cachedNum: done,
+      status: chapters.isNotEmpty && done >= chapters.length
+          ? BookDownloadStatus.finish
+          : BookDownloadStatus.none,
+    );
   }
 
   // 获取目录
@@ -114,7 +119,7 @@ class BookDownloaderNotifier extends FamilyNotifier<BookDownloader, String> {
       // 如果存在目录文件，直接从文件读取并更新目录
       chapters =
           (json.decode(file.readAsStringSync()) as List<dynamic>).map((e) {
-        return Chapter(cid: e['cid'], name: e['name']);
+        return Chapter.fromJson(Map<String, dynamic>.from(e as Map));
       }).toList();
     } else {
       if (!bookDir.existsSync()) bookDir.createSync(recursive: true);

@@ -22,6 +22,7 @@ Chapter _$ChapterFromJson(Map<String, dynamic> json) {
 mixin _$Chapter {
   String get cid => throw _privateConstructorUsedError;
   String get name => throw _privateConstructorUsedError;
+  String get volume => throw _privateConstructorUsedError;
 
   Map<String, dynamic> toJson() => throw _privateConstructorUsedError;
   @JsonKey(ignore: true)
@@ -33,7 +34,7 @@ abstract class $ChapterCopyWith<$Res> {
   factory $ChapterCopyWith(Chapter value, $Res Function(Chapter) then) =
       _$ChapterCopyWithImpl<$Res, Chapter>;
   @useResult
-  $Res call({String cid, String name});
+  $Res call({String cid, String name, String volume});
 }
 
 /// @nodoc
@@ -51,6 +52,7 @@ class _$ChapterCopyWithImpl<$Res, $Val extends Chapter>
   $Res call({
     Object? cid = null,
     Object? name = null,
+    Object? volume = null,
   }) {
     return _then(_value.copyWith(
       cid: null == cid
@@ -60,6 +62,10 @@ class _$ChapterCopyWithImpl<$Res, $Val extends Chapter>
       name: null == name
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
+              as String,
+      volume: null == volume
+          ? _value.volume
+          : volume // ignore: cast_nullable_to_non_nullable
               as String,
     ) as $Val);
   }
@@ -72,7 +78,7 @@ abstract class _$$_ChapterCopyWith<$Res> implements $ChapterCopyWith<$Res> {
       __$$_ChapterCopyWithImpl<$Res>;
   @override
   @useResult
-  $Res call({String cid, String name});
+  $Res call({String cid, String name, String volume});
 }
 
 /// @nodoc
@@ -87,6 +93,7 @@ class __$$_ChapterCopyWithImpl<$Res>
   $Res call({
     Object? cid = null,
     Object? name = null,
+    Object? volume = null,
   }) {
     return _then(_$_Chapter(
       cid: null == cid
@@ -97,6 +104,10 @@ class __$$_ChapterCopyWithImpl<$Res>
           ? _value.name
           : name // ignore: cast_nullable_to_non_nullable
               as String,
+      volume: null == volume
+          ? _value.volume
+          : volume // ignore: cast_nullable_to_non_nullable
+              as String,
     ));
   }
 }
@@ -104,7 +115,7 @@ class __$$_ChapterCopyWithImpl<$Res>
 /// @nodoc
 @JsonSerializable()
 class _$_Chapter with DiagnosticableTreeMixin implements _Chapter {
-  const _$_Chapter({required this.cid, required this.name});
+  const _$_Chapter({required this.cid, required this.name, this.volume = ""});
 
   factory _$_Chapter.fromJson(Map<String, dynamic> json) =>
       _$$_ChapterFromJson(json);
@@ -113,10 +124,13 @@ class _$_Chapter with DiagnosticableTreeMixin implements _Chapter {
   final String cid;
   @override
   final String name;
+  @override
+  @JsonKey()
+  final String volume;
 
   @override
   String toString({DiagnosticLevel minLevel = DiagnosticLevel.info}) {
-    return 'Chapter(cid: $cid, name: $name)';
+    return 'Chapter(cid: $cid, name: $name, volume: $volume)';
   }
 
   @override
@@ -125,7 +139,8 @@ class _$_Chapter with DiagnosticableTreeMixin implements _Chapter {
     properties
       ..add(DiagnosticsProperty('type', 'Chapter'))
       ..add(DiagnosticsProperty('cid', cid))
-      ..add(DiagnosticsProperty('name', name));
+      ..add(DiagnosticsProperty('name', name))
+      ..add(DiagnosticsProperty('volume', volume));
   }
 
   @override
@@ -134,12 +149,13 @@ class _$_Chapter with DiagnosticableTreeMixin implements _Chapter {
         (other.runtimeType == runtimeType &&
             other is _$_Chapter &&
             (identical(other.cid, cid) || other.cid == cid) &&
-            (identical(other.name, name) || other.name == name));
+            (identical(other.name, name) || other.name == name) &&
+            (identical(other.volume, volume) || other.volume == volume));
   }
 
   @JsonKey(ignore: true)
   @override
-  int get hashCode => Object.hash(runtimeType, cid, name);
+  int get hashCode => Object.hash(runtimeType, cid, name, volume);
 
   @JsonKey(ignore: true)
   @override
@@ -157,7 +173,9 @@ class _$_Chapter with DiagnosticableTreeMixin implements _Chapter {
 
 abstract class _Chapter implements Chapter {
   const factory _Chapter(
-      {required final String cid, required final String name}) = _$_Chapter;
+      {required final String cid,
+      required final String name,
+      final String volume}) = _$_Chapter;
 
   factory _Chapter.fromJson(Map<String, dynamic> json) = _$_Chapter.fromJson;
 
@@ -165,6 +183,8 @@ abstract class _Chapter implements Chapter {
   String get cid;
   @override
   String get name;
+  @override
+  String get volume;
   @override
   @JsonKey(ignore: true)
   _$$_ChapterCopyWith<_$_Chapter> get copyWith =>
